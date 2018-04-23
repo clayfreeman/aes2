@@ -1,6 +1,6 @@
 TARGET		 = main
 SOURCES		 = main.c aes128_key.c
-CL_SOURCES	 = aes128.cl
+CL_SOURCES	 = aes128ctr.cl
 
 OBJECTS		:= ${SOURCES:.c=.o}
 
