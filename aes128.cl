@@ -19,9 +19,27 @@
 
 __kernel void aes128ctr_encrypt(  __constant unsigned char* sb,
     __constant unsigned char* g2, __constant unsigned char* _k,
-      const    unsigned long  _n,   const    unsigned long  _b  ) {
-  unsigned char _s[ 16];
-  unsigned char _t[ 16];
+    __constant unsigned char* _n,   const    unsigned long  _b  ) {
+  unsigned long  _o = _b + get_global_id(0);
+  unsigned char* _c = (unsigned char*)&_o;
+  unsigned char  _s[ 16];
+  unsigned char  _t[ 16];
+  _s[ 0]   = _n[ 0];
+  _s[ 1]   = _n[ 1];
+  _s[ 2]   = _n[ 2];
+  _s[ 3]   = _n[ 3];
+  _s[ 4]   = _n[ 4];
+  _s[ 5]   = _n[ 5];
+  _s[ 6]   = _n[ 6];
+  _s[ 7]   = _n[ 7];
+  _s[ 8]   = _c[ 0];
+  _s[ 9]   = _c[ 1];
+  _s[10]   = _c[ 2];
+  _s[11]   = _c[ 3];
+  _s[12]   = _c[ 4];
+  _s[13]   = _c[ 5];
+  _s[14]   = _c[ 6];
+  _s[15]   = _c[ 7];
   _t[ 0]   = sb[_k[  0] ^ _s[ 0]];
   _t[ 1]   = sb[_k[  5] ^ _s[ 5]];
   _t[ 2]   = sb[_k[ 10] ^ _s[10]];

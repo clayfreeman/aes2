@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <OpenCL/opencl.h>
 
 #include "aes128_key.h"
 
@@ -28,11 +29,8 @@ int main() {
   // Attempt to initialize the key
   aes128_key_init(&key);
 
-  for (size_t i = 0; i < sizeof(key.val); ++i)
-    printf("%s%02x", i % 16 == 0 ? "\n" : (i > 0 ? " " : ""), key.val[i]);
-  printf("\n\n");
-
-
+  clGetPlatformIDs(1, &platform, NULL);
+  clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
 
   // Zero-wipe the key for security
   memset(key.val, 0, sizeof(key.val));
