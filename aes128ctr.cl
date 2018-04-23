@@ -17,6 +17,22 @@
  * <http://www.gnu.org/licenses/>.
  */
 
+/**
+ * An unrolled, instruction optimized AES128 CTR encryption kernel.
+ *
+ * This kernel encrypts a nonce concatenated with a block index that is
+ * calculated using a base index parameter and the kernel's global ID.
+ *
+ * This kernel was developed using my reference implementation of AES128 CTR
+ * for pthread on CPU. This implementation can be found on GitHub at
+ * clayfreeman/aes.
+ *
+ * @param  sb  [description]
+ * @param  g2  [description]
+ * @param  _k  [description]
+ * @param  _n  [description]
+ * @param  _b  [description]
+ */
 __kernel void aes128ctr_encrypt(  __constant unsigned char* sb,
     __constant unsigned char* g2, __constant unsigned char* _k,
     __constant unsigned char* _n,   const    unsigned long  _b  ) {
