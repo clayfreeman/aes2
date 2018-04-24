@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
   cl_program     program = prepare_program(context, _device);
   cl_kernel       kernel = clCreateKernel(program, "aes128ctr_encrypt", NULL);
   clock_gettime(CLOCK_MONOTONIC, &start);
-  // ###
+  // ### Queue the kernel execution and memory copy operations
   // Block until the command queue is finished
   clFinish(queue);
   clock_gettime(CLOCK_MONOTONIC, &end);
@@ -141,7 +141,7 @@ int main(int argc, char* argv[]) {
   clReleaseKernel(kernel);
   // Release the memory held by the compiled program binary
   clReleaseProgram(program);
-  // Flush all device memory buffers
+  // ### Flush all device memory buffers
   // Release the memory held by the command queue
   clReleaseCommandQueue(queue);
   // Release the memory held by the execution context
