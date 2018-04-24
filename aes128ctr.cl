@@ -20,18 +20,18 @@
 /**
  * An unrolled, instruction optimized AES128 CTR encryption kernel.
  *
- * This kernel encrypts a nonce concatenated with a block index that is
- * calculated using a base index parameter and the kernel's global ID.
+ * This kernel encrypts a nonce concatenated with a ciphertext block index that
+ * is calculated by adding a base index parameter and the kernel's global ID.
  *
  * This kernel was developed using my reference implementation of AES128 CTR
  * for pthread on CPU. This implementation can be found on GitHub at
  * clayfreeman/aes.
  *
- * @param  sb  [description]
- * @param  g2  [description]
- * @param  _k  [description]
- * @param  _n  [description]
- * @param  _b  [description]
+ * @param  sb  The byte-value keyed substitution box of AES.
+ * @param  g2  The byte-value keyed Galois Field of 2**8.
+ * @param  _k  The user-specified 128-bit key buffer.
+ * @param  _n  The user-specified 64-bit nonce buffer.
+ * @param  _b  The last ciphertext block offset before this batch began.
  */
 __kernel void aes128ctr_encrypt(  __constant unsigned char* sb,
     __constant unsigned char* g2, __constant unsigned char* _k,
@@ -48,6 +48,20 @@ __kernel void aes128ctr_encrypt(  __constant unsigned char* sb,
   _s[ 5]   = _n[ 5];
   _s[ 6]   = _n[ 6];
   _s[ 7]   = _n[ 7];
+  #ifdef __ENDIAN_LITTLE__
+    _c[0] ^= _c[7];
+    _c[7] ^= _c[0];
+    _c[0] ^= _c[7];
+    _c[1] ^= _c[6];
+    _c[6] ^= _c[1];
+    _c[1] ^= _c[6];
+    _c[2] ^= _c[5];
+    _c[5] ^= _c[2];
+    _c[2] ^= _c[5];
+    _c[3] ^= _c[4];
+    _c[4] ^= _c[3];
+    _c[3] ^= _c[4];
+  #endif
   _s[ 8]   = _c[ 0];
   _s[ 9]   = _c[ 1];
   _s[10]   = _c[ 2];

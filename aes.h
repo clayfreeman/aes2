@@ -20,6 +20,11 @@
 #ifndef __AES_H
 #define __AES_H
 
+#include <arpa/inet.h>
+#ifndef htonll
+#define htonll(x) ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32)
+#endif
+
 typedef union {
   unsigned char bytes[4];
   unsigned  int word;
