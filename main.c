@@ -130,10 +130,22 @@ int main(int argc, char* argv[]) {
   cl_device_id   _device = get_device(device);
   cl_context     context = clCreateContext(NULL, 1, &_device, NULL, NULL, NULL);
   cl_command_queue queue = clCreateCommandQueue(context, _device, 0, NULL);
-  cl_kernel       kernel = prepare_kernel(context, _device);
+  cl_program     program = prepare_program(context, _device);
+  cl_kernel       kernel = clCreateKernel(program, "aes128ctr_encrypt", NULL);
   clock_gettime(CLOCK_MONOTONIC, &start);
   // ###
+  // Block until the command queue is finished
+  clFinish(queue);
   clock_gettime(CLOCK_MONOTONIC, &end);
+  // Release the memory held by the kernel object
+  clReleaseKernel(kernel);
+  // Release the memory held by the compiled program binary
+  clReleaseProgram(program);
+  // Flush all device memory buffers
+  // Release the memory held by the command queue
+  clReleaseCommandQueue(queue);
+  // Release the memory held by the execution context
+  clReleaseContext(context);
   timespec_diff(&start, &end);
   // double duration = ((double)end.tv_sec + (end.tv_nsec / 1E9f));
   // Zero-initialize the nonce and key for security
@@ -163,18 +175,22 @@ void enqueue_crypt(cl_command_queue queue, cl_kernel kernel) {
 */
 cl_device_id get_device(uint64_t idx) {
   // Allocate storage space for required variables
-  cl_uint  deviceCount =    0;
-  cl_device_id* device = NULL;
+  cl_uint deviceCount =    0;
+  cl_device_id*   tmp = NULL;
+  cl_device_id device = NULL;
   // Fetch the total number of devices for this platform
   clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
   // Allocate some memory to hold information about each device
-  device = (cl_device_id*)malloc(sizeof(cl_device_id) * deviceCount);
+  tmp = (cl_device_id*)malloc(sizeof(cl_device_id) * deviceCount);
   // Fetch information for all available devices for this platform
-  clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL, deviceCount, device, NULL);
-  return device[idx];
+  clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL, deviceCount, tmp, NULL);
+  device = tmp[idx];
+  // Free the memory used for fetching devices
+  free(tmp);
+  return device;
 }
 
-cl_kernel prepare_kernel(cl_context context, cl_device_id device) {
+cl_program prepare_program(cl_context context, cl_device_id device) {
   // TODO: Determine the proper program bytecode for this device
   return NULL;
 }
