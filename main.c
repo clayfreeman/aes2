@@ -32,17 +32,23 @@
 #include <OpenCL/OpenCL.h>
 
 #include "aes128_key.h"
+#include "aes128ctr_stream.h"
 
 typedef struct {
   uint8_t val[8];
 } aes128_nonce_t;
+
+const char DCPU32[] = "aes128ctr.cpu32.bc";
+const char DCPU64[] = "aes128ctr.cpu64.bc";
+const char DGPU32[] = "aes128ctr.gpu32.bc";
+const char DGPU64[] = "aes128ctr.gpu64.bc";
 
 aes128_key_t     key;
 aes128_nonce_t nonce;
 
 int  check_device(uint64_t device);
 cl_device_id get_device(uint64_t idx);
-cl_kernel prepare_kernel(cl_context context, cl_device_id device);
+cl_program prepare_program(cl_context context, cl_device_id device);
 void print_devices();
 void timespec_diff(const struct timespec* start, struct timespec* end);
 void usage(int argc, char* argv[]);
@@ -122,43 +128,80 @@ int main(int argc, char* argv[]) {
   }
 
   // Create some state to store the status and duration of the ops
-  // size_t status = 0;
+  size_t status = 0;
   struct timespec start = {0, 0}, end = {0, 0};
   // Attempt to initialize the key and crypt the file
   aes128_key_init(&key);
   // Setup the execution environment for OpenCL
+  const size_t     count = (1 << 25);
   cl_device_id   _device = get_device(device);
   cl_context     context = clCreateContext(NULL, 1, &_device, NULL, NULL, NULL);
   cl_command_queue queue = clCreateCommandQueue(context, _device, 0, NULL);
   cl_program     program = prepare_program(context, _device);
   cl_kernel       kernel = clCreateKernel(program, "aes128ctr_encrypt", NULL);
+  // Copy the AES substitution box, Galois field multiplication lookup, key and
+  // nonce into the device memory for faster kernel execution
+  cl_mem             _st = clCreateBuffer(context, CL_MEM_READ_WRITE |
+    CL_MEM_ALLOC_HOST_PTR, (count << 4),      NULL,           NULL);
+  cl_mem             _sb = clCreateBuffer(context, CL_MEM_READ_ONLY  |
+    CL_MEM_COPY_HOST_PTR,  sizeof(aes_sbox), (void*)aes_sbox, NULL);
+  cl_mem             _g2 = clCreateBuffer(context, CL_MEM_READ_ONLY  |
+    CL_MEM_COPY_HOST_PTR,  sizeof(aes_gal2), (void*)aes_gal2, NULL);
+  cl_mem              _k = clCreateBuffer(context, CL_MEM_READ_ONLY  |
+    CL_MEM_COPY_HOST_PTR,  sizeof(key),      (void*)&key,     NULL);
+  cl_mem              _n = clCreateBuffer(context, CL_MEM_READ_ONLY  |
+    CL_MEM_COPY_HOST_PTR,  sizeof(nonce),    (void*)&nonce,   NULL);
+  unsigned long       _b = 0;
+  // Assign arguments to the kernel
+  clSetKernelArg(kernel, 0, sizeof(_st), (void*)&_st);
+  clSetKernelArg(kernel, 1, sizeof(_sb), (void*)&_sb);
+  clSetKernelArg(kernel, 2, sizeof(_g2), (void*)&_g2);
+  clSetKernelArg(kernel, 3, sizeof(_k ), (void*)&_k );
+  clSetKernelArg(kernel, 4, sizeof(_n ), (void*)&_n );
+  clSetKernelArg(kernel, 5, sizeof(_b ), (void*)&_b );
+  // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
-  // ### Queue the kernel execution and memory copy operations
+  clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &count, NULL, 0, NULL, NULL);
   // Block until the command queue is finished
   clFinish(queue);
+  // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
+  // ### DEBUG
+  unsigned char* buf = (unsigned char*)clEnqueueMapBuffer(queue, _st, CL_TRUE,
+    CL_MAP_READ, 0, (count << 4), 0, NULL, NULL, NULL);
+  for (size_t i = 0; i < (count << 4); ++i)
+    fprintf(stderr, "%s%02x", (i % 16 == 0 ?
+      (i == 0 ? "" : "\n") : " "), buf[i]);
+  fprintf(stderr, "\n");
+  // ### DEBUG
   // Release the memory held by the kernel object
   clReleaseKernel(kernel);
   // Release the memory held by the compiled program binary
   clReleaseProgram(program);
-  // ### Flush all device memory buffers
+  // Release all device memory buffers
+  clReleaseMemObject(_st);
+  clReleaseMemObject(_sb);
+  clReleaseMemObject(_g2);
+  clReleaseMemObject(_k);
+  clReleaseMemObject(_n);
   // Release the memory held by the command queue
   clReleaseCommandQueue(queue);
   // Release the memory held by the execution context
   clReleaseContext(context);
   timespec_diff(&start, &end);
-  // double duration = ((double)end.tv_sec + (end.tv_nsec / 1E9f));
+  double duration = ((double)end.tv_sec + (end.tv_nsec / 1E9f));
   // Zero-initialize the nonce and key for security
   memset(nonce.val, 0, sizeof(nonce.val));
   memset(  key.val, 0, sizeof(  key.val));
-  // // Check the status of the cryption operation
-  // if (status != size) {
-  //   fprintf(stderr, "error: Cryption failed\n");
-  //   return 127;
-  // }
-  // fprintf(stderr, "success: Crypted %f MB in %f sec (%f MB/s)\n",
-  //   (status / (double)(1 << 20)),  duration,
-  //   (status / (double)(1 << 20)) / duration);
+  // Check the status of the cryption operation
+  if (status != size) {
+    fprintf(stderr, "error: Cryption failed\n");
+    return 127;
+  }
+  fprintf(stderr, "success: Crypted %f MB in %f sec (%f MB/s)\n",
+    (status / (double)(1 << 20)),  duration,
+    (status / (double)(1 << 20)) / duration);
+
   return 0;
 }
 
@@ -173,6 +216,23 @@ void enqueue_crypt(cl_command_queue queue, cl_kernel kernel) {
   //
 }
 */
+
+size_t file_get_contents(const char* path, unsigned char** out) {
+  // Open the file path for binary read
+  FILE* fh = fopen(path, "rb");
+  // Determine the size of the file
+  size_t fs = 0;
+  fseek(fh, 0, SEEK_END);
+  fs = ftell(fh);
+  fseek(fh, 0, SEEK_SET);
+  // Allocate some memory to store the resulting file contents
+  (*out) = (unsigned char*)malloc(fs);
+  // Read the entire file into the buffer
+  size_t fr = fread(out, fs, 1, fh);
+  fclose(fh);
+  return fr;
+}
+
 cl_device_id get_device(uint64_t idx) {
   // Allocate storage space for required variables
   cl_uint deviceCount =    0;
@@ -191,7 +251,36 @@ cl_device_id get_device(uint64_t idx) {
 }
 
 cl_program prepare_program(cl_context context, cl_device_id device) {
-  // TODO: Determine the proper program bytecode for this device
+  cl_uint        bits = 0;
+  cl_device_type type = 0;
+  // Fetch the device category and bit length information
+  clGetDeviceInfo(device, CL_DEVICE_ADDRESS_BITS, sizeof(bits), &bits, NULL);
+  clGetDeviceInfo(device, CL_DEVICE_TYPE,         sizeof(type), &type, NULL);
+  // Determine the appropriate binary to load for execution
+  const char* binary = NULL;
+  if (type & CL_DEVICE_TYPE_CPU) {
+    if (bits == 32) {
+      binary = DCPU32;
+    } else if (bits == 64) {
+      binary = DCPU64;
+    }
+  } else if (type & CL_DEVICE_TYPE_GPU) {
+    if (bits == 32) {
+      binary = DGPU32;
+    } else if (bits == 64) {
+      binary = DGPU64;
+    }
+  }
+  // Attempt to load the binary into a string
+  if (binary != NULL) {
+    // Attempt to create a program from the selected binary
+    size_t         len = strlen(binary);
+    cl_program program = clCreateProgramWithBinary(context, 1, &device, &len,
+      (const unsigned char**)&binary, NULL, NULL);
+    // Attempt to build the program for the device
+    clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+    return program;
+  }
   return NULL;
 }
 
