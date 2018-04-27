@@ -231,6 +231,7 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   cl_int status   = CL_SUCCESS;
   // Allocate the bytes required to store the requested number of blocks
   stream->start   = (unsigned char*)malloc(buffer_block_size << 4);
+  if (stream->start == NULL) return CL_MEM_OBJECT_ALLOCATION_FAILURE;
   // Initialize the remainder of pointers for the stream
   stream->end     = stream->start + (buffer_block_size << 4);
   stream->read    = stream->start;

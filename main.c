@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
   // ### DEBUG
   // Attempt to map the pinned memory buffer to the result pointer
   code = aes128ctr_stream_map_buffer((void**)&stream.result, &stream.queue,
-    &stream._st, CL_MAP_READ, 0, (stream.radix << 4));
+    &stream._st, CL_MAP_READ, 0, (stream.end - stream.start));
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
