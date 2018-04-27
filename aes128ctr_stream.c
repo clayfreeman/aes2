@@ -276,10 +276,20 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(*nonce), (void*)nonce);
   if (status != CL_SUCCESS) return status;
   // Assign each memory buffer argument to the kernel
-  clSetKernelArg(stream->kernel, 0, sizeof(stream->_st), (void*)&stream->_st);
-  clSetKernelArg(stream->kernel, 1, sizeof(stream->_sb), (void*)&stream->_sb);
-  clSetKernelArg(stream->kernel, 2, sizeof(stream->_g2), (void*)&stream->_g2);
-  clSetKernelArg(stream->kernel, 3, sizeof(stream->_k ), (void*)&stream->_k );
-  clSetKernelArg(stream->kernel, 4, sizeof(stream->_n ), (void*)&stream->_n );
+  status = clSetKernelArg(stream->kernel, 0,
+    sizeof(stream->_st), (void*)&stream->_st);
+  if (status != CL_SUCCESS) return status;
+  status = clSetKernelArg(stream->kernel, 1,
+    sizeof(stream->_sb), (void*)&stream->_sb);
+  if (status != CL_SUCCESS) return status;
+  status = clSetKernelArg(stream->kernel, 2,
+    sizeof(stream->_g2), (void*)&stream->_g2);
+  if (status != CL_SUCCESS) return status;
+  status = clSetKernelArg(stream->kernel, 3,
+    sizeof(stream->_k ), (void*)&stream->_k );
+  if (status != CL_SUCCESS) return status;
+  status = clSetKernelArg(stream->kernel, 4,
+    sizeof(stream->_n ), (void*)&stream->_n );
+  if (status != CL_SUCCESS) return status;
   return status;
 }
