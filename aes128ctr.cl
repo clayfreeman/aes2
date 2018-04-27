@@ -33,9 +33,9 @@
  * @param  _n  The user-specified 64-bit nonce buffer.
  * @param  _b  The last ciphertext block offset before this batch began.
  */
-__kernel void aes128ctr_encrypt(  __global   unsigned char* st,
-    __constant unsigned char* sb, __constant unsigned char* g2,
-    __constant unsigned char* _k, __constant unsigned char* _n,
+__kernel void aes128ctr_encrypt(        __global   unsigned char* st,
+    __constant unsigned char* const sb, __constant unsigned char* const g2,
+    __constant unsigned char* const _k, __constant unsigned char* const _n,
                unsigned long  _b  ) {
   st += (_b += get_global_id(0)) << 4;
   unsigned char* _c = (unsigned char*)&_b;
@@ -70,6 +70,7 @@ __kernel void aes128ctr_encrypt(  __global   unsigned char* st,
   st[13]   = _c[ 5];
   st[14]   = _c[ 6];
   st[15]   = _c[ 7];
+  return;
   _t[ 0]   = sb[_k[  0] ^ st[ 0]];
   _t[ 1]   = sb[_k[  5] ^ st[ 5]];
   _t[ 2]   = sb[_k[ 10] ^ st[10]];

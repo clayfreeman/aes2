@@ -196,8 +196,8 @@ cl_int aes128ctr_stream_map_buffer(void** const map,
     const cl_map_flags flags, const size_t offset, const size_t length) {
   // Allocate storage for an error code and attempt to create the kernel
   cl_int status = CL_SUCCESS;
-  (*map) = clEnqueueMapBuffer(*queue, *buffer, CL_TRUE, flags, offset, length,
-    0, NULL, NULL, &status);
+  (*map) = (unsigned char*)clEnqueueMapBuffer(*queue, *buffer, CL_TRUE, flags,
+    offset, length, 0, NULL, NULL, &status);
   return status;
 }
 
@@ -247,10 +247,6 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
     CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, (stream->radix << 4), NULL);
-  if (status != CL_SUCCESS) return status;
-  // Attempt to map the pinned memory buffer to the result pointer
-  status = aes128ctr_stream_map_buffer((void**)&stream->result, &stream->queue,
-    &stream->_st, CL_MAP_READ, 0, (stream->radix << 4));
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,

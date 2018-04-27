@@ -65,6 +65,10 @@ typedef struct {
   size_t         pending; // The number of blocks in the current kernel range
 } aes128ctr_stream_t;
 
+extern cl_int aes128ctr_stream_map_buffer(void** const map,
+  cl_command_queue* const queue, cl_mem* const buffer,
+  const cl_map_flags flags, const size_t offset, const size_t length);
+
 extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   const size_t device, const size_t buffer_block_size,
   const aes128_key_t* const key, const aes128_nonce_t* const nonce);

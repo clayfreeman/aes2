@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
   aes128_key_init(&key);
   // Attempt to initialize the AES128 CTR encryption stream
   aes128ctr_stream_t stream;
-  const size_t count = 1;
+  const size_t count = 1<<4;
   cl_int code = aes128ctr_stream_init(&stream, device, count, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
@@ -142,6 +142,15 @@ int main(int argc, char* argv[]) {
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
   // ### DEBUG
+  // Attempt to map the pinned memory buffer to the result pointer
+  code = aes128ctr_stream_map_buffer((void**)&stream.result, &stream.queue,
+    &stream._st, CL_MAP_READ, 0, (stream.radix << 4));
+  if (code != CL_SUCCESS) {
+    fprintf(stderr, "OpenCL error: %d\n", code);
+    usage(argc, argv);
+    return 10;
+  }
+  // Print the mapped memory buffer
   for (size_t i = 0; i < (count << 4); ++i)
     fprintf(stderr, "%s%02x", (i % 16 == 0 ?
       (i == 0 ? "" : "\n") : " "), stream.result[i]);
