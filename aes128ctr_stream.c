@@ -321,7 +321,7 @@ cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
       NULL, &count, NULL, 0, NULL, NULL);
     if (status != CL_SUCCESS) return status;
     // Map the result buffer to the OpenCL device state output
-    status = aes128ctr_stream_map_buffer(&stream->result, &stream->queue,
+    status = aes128ctr_stream_map_buffer((void*)&stream->result, &stream->queue,
       &stream->_st, CL_MAP_READ, 0, stream->pending);
     if (status != CL_SUCCESS) return status;
     // Wait until the queue is flushed before continuing
