@@ -40,14 +40,6 @@ __kernel void aes128ctr_encrypt(        __global   unsigned char* st,
   st += (_b += get_global_id(0)) << 4;
   unsigned char* _c = (unsigned char*)&_b;
   unsigned char  _t[ 16];
-  st[ 0]   = _n[ 0];
-  st[ 1]   = _n[ 1];
-  st[ 2]   = _n[ 2];
-  st[ 3]   = _n[ 3];
-  st[ 4]   = _n[ 4];
-  st[ 5]   = _n[ 5];
-  st[ 6]   = _n[ 6];
-  st[ 7]   = _n[ 7];
   #ifdef __ENDIAN_LITTLE__
     _c[0] ^= _c[7];
     _c[7] ^= _c[0];
@@ -62,6 +54,14 @@ __kernel void aes128ctr_encrypt(        __global   unsigned char* st,
     _c[4] ^= _c[3];
     _c[3] ^= _c[4];
   #endif
+  st[ 0]   = _n[ 0];
+  st[ 1]   = _n[ 1];
+  st[ 2]   = _n[ 2];
+  st[ 3]   = _n[ 3];
+  st[ 4]   = _n[ 4];
+  st[ 5]   = _n[ 5];
+  st[ 6]   = _n[ 6];
+  st[ 7]   = _n[ 7];
   st[ 8]   = _c[ 0];
   st[ 9]   = _c[ 1];
   st[10]   = _c[ 2];

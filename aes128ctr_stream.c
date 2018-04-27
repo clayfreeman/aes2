@@ -258,11 +258,11 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the key
   status = aes128ctr_stream_create_buffer(&stream->_k, &stream->context,
-    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(key), (void*)key);
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(*key), (void*)key);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the nonce
   status = aes128ctr_stream_create_buffer(&stream->_n, &stream->context,
-    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nonce), (void*)nonce);
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(*nonce), (void*)nonce);
   if (status != CL_SUCCESS) return status;
   // Assign each memory buffer argument to the kernel
   clSetKernelArg(stream->kernel, 0, sizeof(stream->_st), (void*)&stream->_st);
