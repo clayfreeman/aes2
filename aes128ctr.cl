@@ -27,6 +27,7 @@
  * for pthread on CPU. This implementation can be found on GitHub at
  * clayfreeman/aes.
  *
+ * @param  st  An output parameter used to store the results.
  * @param  sb  The byte-value keyed substitution box of AES.
  * @param  g2  The byte-value keyed Galois Field of 2**8.
  * @param  _k  The user-specified 128-bit key buffer.
