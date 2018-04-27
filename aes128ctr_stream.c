@@ -34,6 +34,17 @@ const char DCPU64[] = "aes128ctr.cpu64.bc";
 const char DGPU32[] = "aes128ctr.gpu32.bc";
 const char DGPU64[] = "aes128ctr.gpu64.bc";
 
+/**
+ * Creates an OpenCL device memory buffer.
+ *
+ * @param   buffer   An output parameter used to store the buffer.
+ * @param   context  The OpenCL context for which to create a buffer.
+ * @param   flags    Flags to modify how the buffer is created.
+ * @param   size     The size of the buffer (or host pointer).
+ * @param   ptr      A host pointer used to initialize the buffer.
+ *
+ * @return           See documentation for OpenCL's `clCreateBuffer()`.
+ */
 cl_int aes128ctr_stream_create_buffer(cl_mem* const buffer,
     cl_context* const context, const cl_mem_flags flags,
     const size_t size, void* ptr) {
