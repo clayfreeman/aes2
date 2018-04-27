@@ -77,4 +77,6 @@ extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   const size_t device, const size_t buffer_block_size,
   const aes128_key_t* const key, const aes128_nonce_t* const nonce);
 
+extern cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream);
+
 #endif
