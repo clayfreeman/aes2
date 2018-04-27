@@ -43,11 +43,11 @@ typedef struct {
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
    * kernel that is responsible for generating the XOR data stream.
    */
-  cl_device_id    device;
-  cl_context     context;
-  cl_command_queue queue;
-  cl_program     program;
-  cl_kernel       kernel;
+  cl_device_id    device; // The OpenCL device ID
+  cl_context     context; // The OpenCL execution context
+  cl_command_queue queue; // The command queue for the execution context
+  cl_program     program; // The compiled program containing the kernel
+  cl_kernel       kernel; // The kernel to be ran on the OpenCL device
 
   /**
    * Variables used for the AES128 algorithm in the OpenCL kernel.
@@ -65,7 +65,8 @@ typedef struct {
   size_t         pending; // The number of blocks in the current kernel range
 } aes128ctr_stream_t;
 
-extern aes128ctr_stream_t aes128ctr_stream_create(cl_device_id device,
-  size_t buffer_block_size, aes128_key_t key, aes128_nonce_t nonce);
+extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
+  const size_t device, const size_t buffer_block_size,
+  const aes128_key_t* const key, const aes128_nonce_t* const nonce);
 
 #endif

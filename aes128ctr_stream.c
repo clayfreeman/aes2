@@ -34,6 +34,15 @@ const char DCPU64[] = "aes128ctr.cpu64.bc";
 const char DGPU32[] = "aes128ctr.gpu32.bc";
 const char DGPU64[] = "aes128ctr.gpu64.bc";
 
+cl_int aes128ctr_stream_create_buffer(cl_mem* const buffer,
+    cl_context* const context, const cl_mem_flags flags,
+    const size_t size, void* ptr) {
+  // Allocate storage for an error code and attempt to create the buffer
+  cl_int status = CL_SUCCESS;
+  (*buffer) = clCreateBuffer(*context, flags, size, ptr, &status);
+  return status;
+}
+
 /**
  * Creates an OpenCL command queue for a specific context and device.
  *
@@ -170,6 +179,29 @@ cl_int aes128ctr_stream_get_device_by_index(cl_device_id* const device,
 }
 
 /**
+ * Enqueue a blocking memory mapping to a device buffer.
+ *
+ * @param   map     An output parameter used to store the mapped address.
+ * @param   queue   The command queue used to enqueue the mapping.
+ * @param   buffer  The memory buffer for which to create a mapping.
+ * @param   flags   Flags to modify how the mapping is created.
+ * @param   offset  The desired offset within the memory buffer at which to
+ *                  begin the mapping.
+ * @param   length  The desired length of the mapping.
+ *
+ * @return          See documentation for OpenCL's `clEnqueueMapBuffer()`.
+ */
+cl_int aes128ctr_stream_map_buffer(void** const map,
+    cl_command_queue* const queue, cl_mem* const buffer,
+    const cl_map_flags flags, const size_t offset, const size_t length) {
+  // Allocate storage for an error code and attempt to create the kernel
+  cl_int status = CL_SUCCESS;
+  (*map) = clEnqueueMapBuffer(*queue, *buffer, CL_TRUE, flags, offset, length,
+    0, NULL, NULL, &status);
+  return status;
+}
+
+/**
  * Initializes an AES128 CTR data stream instance for a specific OpenCL device.
  *
  * @param   stream             The zero-index of the desired OpenCL device.
@@ -181,18 +213,20 @@ cl_int aes128ctr_stream_get_device_by_index(cl_device_id* const device,
  *
  * @return                     An OpenCL status (error) code.
  */
-cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream, size_t device,
-    size_t buffer_block_size, aes128_key_t key, aes128_nonce_t nonce) {
+cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
+    const size_t device, const size_t buffer_block_size,
+    const aes128_key_t* const key, const aes128_nonce_t* const nonce) {
   // Create a temporary status variable for error checking
-  cl_int status  = CL_SUCCESS;
+  cl_int status   = CL_SUCCESS;
   // Zero-initialize the index and block count
-  stream->index  = 0;
-  stream->offset = 0;
-  stream->count  = 0;
+  stream->index   = 0;
+  stream->offset  = 0;
+  stream->count   = 0;
+  stream->pending = 0;
   // Set the radix of the ring buffer
-  stream->radix  = buffer_block_size;
+  stream->radix   = buffer_block_size;
   // Allocate the bytes required to store this radix of blocks
-  stream->buffer = (unsigned char*)malloc(stream->radix << 4);
+  stream->buffer  = (unsigned char*)malloc(stream->radix << 4);
   // Attempt to fetch the OpenCL device ID of the preferred device by index
   status = aes128ctr_stream_get_device_by_index(&stream->device, device);
   if (status != CL_SUCCESS) return status;
@@ -210,5 +244,35 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream, size_t device,
   // Attempt to create a kernel for this program
   status = aes128ctr_stream_create_kernel(&stream->kernel, &stream->program);
   if (status != CL_SUCCESS) return status;
+  // Attempt to create a pinned memory buffer for storing results
+  status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
+    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, (stream->radix << 4), NULL);
+  if (status != CL_SUCCESS) return status;
+  // Attempt to map the pinned memory buffer to the result pointer
+  status = aes128ctr_stream_map_buffer((void**)&stream->result, &stream->queue,
+    &stream->_st, CL_MAP_READ, 0, (stream->radix << 4));
+  if (status != CL_SUCCESS) return status;
+  // Attempt to create a constant memory buffer for the substitution box
+  status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(aes_sbox), (void*)aes_sbox);
+  if (status != CL_SUCCESS) return status;
+  // Attempt to create a constant memory buffer for the 2x Galois field of 2**8
+  status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(aes_gal2), (void*)aes_gal2);
+  if (status != CL_SUCCESS) return status;
+  // Attempt to create a constant memory buffer for the key
+  status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(key), (void*)key);
+  if (status != CL_SUCCESS) return status;
+  // Attempt to create a constant memory buffer for the nonce
+  status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
+    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nonce), (void*)nonce);
+  if (status != CL_SUCCESS) return status;
+  // Assign each memory buffer argument to the kernel
+  clSetKernelArg(stream->kernel, 0, sizeof(stream->_st), (void*)&stream->_st);
+  clSetKernelArg(stream->kernel, 1, sizeof(stream->_sb), (void*)&stream->_sb);
+  clSetKernelArg(stream->kernel, 2, sizeof(stream->_g2), (void*)&stream->_g2);
+  clSetKernelArg(stream->kernel, 3, sizeof(stream->_k ), (void*)&stream->_k );
+  clSetKernelArg(stream->kernel, 4, sizeof(stream->_n ), (void*)&stream->_n );
   return status;
 }
