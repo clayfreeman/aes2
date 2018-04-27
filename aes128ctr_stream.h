@@ -28,6 +28,8 @@
   #include <CL/opencl.h>
 #endif
 
+#define AES128CTR_STREAM_MAX_KERNELS 1 << 20
+
 typedef struct {
   /**
    * Variables pertaining to the ring buffer that is used to hold intermediary

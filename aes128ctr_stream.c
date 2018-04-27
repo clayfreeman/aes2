@@ -29,6 +29,11 @@
 #include "aes128.h"
 #include "aes128ctr_stream.h"
 
+#define MIN(a,b) \
+  ({ __typeof__ (a) _a = (a); \
+     __typeof__ (b) _b = (b); \
+    _a < _b ? _a : _b; })
+
 const char DCPU32[] = "aes128ctr.cpu32.bc";
 const char DCPU64[] = "aes128ctr.cpu64.bc";
 const char DGPU32[] = "aes128ctr.gpu32.bc";
@@ -260,7 +265,8 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   if (status != CL_SUCCESS) return status;
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
-    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, stream->size, NULL);
+    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
+    MIN(AES128CTR_STREAM_MAX_KERNELS, stream->size), NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
@@ -294,5 +300,56 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   status = clSetKernelArg(stream->kernel, 4,
     sizeof(stream->_n ), (void*)&stream->_n );
   if (status != CL_SUCCESS) return status;
+  return status;
+}
+
+cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
+  cl_int status = CL_SUCCESS;
+  // Determine the number of kernels that should be launched to refill
+  stream->pending = MIN(AES128CTR_STREAM_MAX_KERNELS,
+    (stream->size - stream->length) >> 4) << 4;
+  // Calculate the number of kernels that should be executed
+  size_t count = stream->pending >> 4;
+  // Only attempt to refill the buffer if not already full
+  if (count > 0) {
+    // Set the block index offset kernel argument
+    status = clSetKernelArg(stream->kernel, 5,
+      sizeof(stream->index), &stream->index);
+    if (status != CL_SUCCESS) return status;
+    // Enqueue the pending number of kernels to the OpenCL device for execution
+    status = clEnqueueNDRangeKernel(stream->queue, stream->kernel, 1,
+      NULL, &count, NULL, 0, NULL, NULL);
+    if (status != CL_SUCCESS) return status;
+    // Map the result buffer to the OpenCL device state output
+    status = aes128ctr_stream_map_buffer(&stream->result, &stream->queue,
+      &stream->_st, CL_MAP_READ, 0, *stream->pending);
+    if (status != CL_SUCCESS) return status;
+    // Wait until the queue is flushed before continuing
+    status = clFinish(stream->queue);
+    if (status != CL_SUCCESS) return status;
+    // Increment the next block index based on the kernel count
+    stream->index += count;
+    // Determine if this refill crosses the boundary of the buffer
+    if (stream->write + stream->pending > stream->end) {
+      // Perform the first copy operation following the write pointer
+      size_t partial = stream->end - stream->write;
+      memcpy(stream->write, stream->result, partial);
+      stream->write    = stream->start;
+      stream->result  += partial;
+      stream->length  += partial;
+      stream->pending -= partial;
+    }
+    // Perform the final copy operation to refill the buffer
+    memcpy(stream->write, stream->result, stream->pending);
+    stream->write   = stream->start;
+    stream->result += stream->pending;
+    stream->length += stream->pending;
+    stream->pending = 0;
+    // Unmap the pinned memory region of the OpenCL device state
+    status = (cl_int)clEnqueueUnmapMemObject(stream->queue, stream->_st,
+      stream->result, 0, NULL, NULL);
+    if (status != CL_SUCCESS) return status;
+    stream->result = NULL;
+  }
   return status;
 }
