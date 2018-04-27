@@ -128,7 +128,22 @@ int main(int argc, char* argv[]) {
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
   // Enqueue the kernel for execution on the OpenCL device
-  code = aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
+  code |= aes128ctr_stream_refill(&stream);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
