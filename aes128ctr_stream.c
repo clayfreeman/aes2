@@ -338,7 +338,7 @@ cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
     }
     // Perform the final copy operation to refill the buffer
     memcpy(stream->write, stream->result, stream->pending);
-    stream->write   = stream->start;
+    stream->write  += stream->pending;
     stream->result += stream->pending;
     stream->length += stream->pending;
     stream->pending = 0;
