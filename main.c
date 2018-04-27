@@ -128,32 +128,19 @@ int main(int argc, char* argv[]) {
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
   // Enqueue the kernel for execution on the OpenCL device
-  unsigned long offset = 0;
-  clSetKernelArg(stream.kernel, 5, sizeof(offset), (void*)&offset);
-  code = clEnqueueNDRangeKernel(stream.queue, stream.kernel, 1, NULL,
-    &count, NULL, 0, NULL, NULL);
+  code = aes128ctr_stream_refill(&stream);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
     return 10;
   }
-  // Block until the command queue is finished
-  clFinish(stream.queue);
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
   // ### DEBUG
-  // Attempt to map the pinned memory buffer to the result pointer
-  code = aes128ctr_stream_map_buffer((void**)&stream.result, &stream.queue,
-    &stream._st, CL_MAP_READ, 0, stream->size);
-  if (code != CL_SUCCESS) {
-    fprintf(stderr, "OpenCL error: %d\n", code);
-    usage(argc, argv);
-    return 10;
-  }
   // Print the mapped memory buffer
   for (size_t i = 0; i < (count << 4); ++i)
     fprintf(stderr, "%s%02x", (i % 16 == 0 ?
-      (i == 0 ? "" : "\n") : " "), stream.result[i]);
+      (i == 0 ? "" : "\n") : " "), stream.read[i]);
   fprintf(stderr, "\n");
   // ### DEBUG
   timespec_diff(&start, &end);
