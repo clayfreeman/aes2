@@ -37,8 +37,9 @@
 __kernel void aes128ctr_encrypt(        __global   unsigned char* st,
     __constant unsigned char* const sb, __constant unsigned char* const g2,
     __constant unsigned char* const _k, __constant unsigned char* const _n,
-               unsigned long  _b  ) {
-  st += (_b += get_global_id(0)) << 4;
+               unsigned long        _b  ) {
+  _b += get_global_id(0);
+  st += get_global_id(0) << 4;
   unsigned char* _c = (unsigned char*)&_b;
   unsigned char  _t[ 16];
   #ifdef __ENDIAN_LITTLE__

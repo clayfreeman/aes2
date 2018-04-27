@@ -41,7 +41,7 @@ typedef struct {
   unsigned char*   write; // The current write pointer in the buffer
   size_t            size; // The number of bytes in the buffer
   size_t          length; // The number of readable bytes
-  size_t           index; // The next AES128 CTR block index
+  unsigned long    index; // The next AES128 CTR block index
 
   /**
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
