@@ -33,11 +33,12 @@ typedef struct {
    * Variables pertaining to the ring buffer that is used to hold intermediary
    * AES128 CTR data that is to be XOR'ed with plain text.
    */
-  unsigned char*  buffer; // Ring buffer memory space
-  size_t           radix; // Block radix of the ring buffer
-  size_t           index; // The current block read index
-  size_t          offset; // The offset into the current block
-  size_t           count; // The number of readable blocks
+  unsigned char*   start; // Pointer to the beginning of the ring buffer
+  unsigned char*     end; // Pointer to the end of the ring buffer
+  unsigned char*    read; // The current read pointer in the buffer
+  unsigned char*   write; // The current write pointer in the buffer
+  size_t          length; // The number of readable bytes
+  size_t           index; // The next AES128 CTR block index
 
   /**
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
@@ -62,7 +63,7 @@ typedef struct {
    * Variables used to copy back results from the OpenCL device.
    */
   unsigned char*  result; // Host-mapped OpenCL-accessible pinned memory
-  size_t         pending; // The number of blocks in the current kernel range
+  size_t         pending; // The size of pending data in this kernel range
 } aes128ctr_stream_t;
 
 extern cl_int aes128ctr_stream_map_buffer(void** const map,

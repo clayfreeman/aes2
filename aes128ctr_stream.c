@@ -229,15 +229,16 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
     const aes128_key_t* const key, const aes128_nonce_t* const nonce) {
   // Create a temporary status variable for error checking
   cl_int status   = CL_SUCCESS;
-  // Zero-initialize the index and block count
+  // Allocate the bytes required to store the requested number of blocks
+  stream->start   = (unsigned char*)malloc(buffer_block_size << 4);
+  // Initialize the remainder of pointers for the stream
+  stream->end     = stream->start + (buffer_block_size << 4);
+  stream->read    = stream->start;
+  stream->write   = stream->start;
+  // Zero-initialize the length, block index and pending bytes count
+  stream->length  = 0;
   stream->index   = 0;
-  stream->offset  = 0;
-  stream->count   = 0;
   stream->pending = 0;
-  // Set the radix of the ring buffer
-  stream->radix   = buffer_block_size;
-  // Allocate the bytes required to store this radix of blocks
-  stream->buffer  = (unsigned char*)malloc(stream->radix << 4);
   // Attempt to fetch the OpenCL device ID of the preferred device by index
   status = aes128ctr_stream_get_device_by_index(&stream->device, device);
   if (status != CL_SUCCESS) return status;
@@ -257,7 +258,7 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   if (status != CL_SUCCESS) return status;
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
-    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, (stream->radix << 4), NULL);
+    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, (buffer_block_size << 4), NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
