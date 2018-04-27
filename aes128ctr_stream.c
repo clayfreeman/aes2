@@ -29,10 +29,7 @@
 #include "aes128.h"
 #include "aes128ctr_stream.h"
 
-#define MIN(a,b) \
-  ({ __typeof__ (a) _a = (a); \
-     __typeof__ (b) _b = (b); \
-    _a < _b ? _a : _b; })
+#define MIN(a,b) (a < b ? a : b)
 
 const char DCPU32[] = "aes128ctr.cpu32.bc";
 const char DCPU64[] = "aes128ctr.cpu64.bc";
