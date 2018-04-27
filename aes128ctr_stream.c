@@ -230,10 +230,11 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   // Create a temporary status variable for error checking
   cl_int status   = CL_SUCCESS;
   // Allocate the bytes required to store the requested number of blocks
-  stream->start   = (unsigned char*)malloc(buffer_block_size << 4);
+  stream->size    = buffer_block_size << 4;
+  stream->start   = (unsigned char*)malloc(stream->size);
   if (stream->start == NULL) return CL_MEM_OBJECT_ALLOCATION_FAILURE;
   // Initialize the remainder of pointers for the stream
-  stream->end     = stream->start + (buffer_block_size << 4);
+  stream->end     = stream->start + stream->size;
   stream->read    = stream->start;
   stream->write   = stream->start;
   // Zero-initialize the length, block index and pending bytes count
@@ -259,7 +260,7 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   if (status != CL_SUCCESS) return status;
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
-    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, (buffer_block_size << 4), NULL);
+    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, stream->size, NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,

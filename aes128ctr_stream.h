@@ -37,6 +37,7 @@ typedef struct {
   unsigned char*     end; // Pointer to the end of the ring buffer
   unsigned char*    read; // The current read pointer in the buffer
   unsigned char*   write; // The current write pointer in the buffer
+  size_t            size; // The number of bytes in the buffer
   size_t          length; // The number of readable bytes
   size_t           index; // The next AES128 CTR block index
 
