@@ -31,17 +31,8 @@
 #include <unistd.h>
 #include <OpenCL/OpenCL.h>
 
-#include "aes128_key.h"
+#include "aes128.h"
 #include "aes128ctr_stream.h"
-
-typedef struct {
-  uint8_t val[8];
-} aes128_nonce_t;
-
-const char DCPU32[] = "aes128ctr.cpu32.bc";
-const char DCPU64[] = "aes128ctr.cpu64.bc";
-const char DGPU32[] = "aes128ctr.gpu32.bc";
-const char DGPU64[] = "aes128ctr.gpu64.bc";
 
 aes128_key_t     key;
 aes128_nonce_t nonce;
@@ -260,15 +251,15 @@ cl_program prepare_program(cl_context context, cl_device_id device) {
   const char* binary = NULL;
   if (type & CL_DEVICE_TYPE_CPU) {
     if (bits == 32) {
-      binary = DCPU32;
+      // binary = DCPU32;
     } else if (bits == 64) {
-      binary = DCPU64;
+      // binary = DCPU64;
     }
   } else if (type & CL_DEVICE_TYPE_GPU) {
     if (bits == 32) {
-      binary = DGPU32;
+      // binary = DGPU32;
     } else if (bits == 64) {
-      binary = DGPU64;
+      // binary = DGPU64;
     }
   }
   // Attempt to load the binary into a string

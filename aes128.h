@@ -17,10 +17,14 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __AES128_KEY_H
-#define __AES128_KEY_H
+#ifndef __AES128_H
+#define __AES128_H
 
 #include "aes.h"
+
+typedef struct {
+  unsigned char val[8];
+} aes128_nonce_t;
 
 typedef struct {
   unsigned char val[176];

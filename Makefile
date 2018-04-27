@@ -1,5 +1,5 @@
 TARGET		 = main
-SOURCES		 = main.c aes128_key.c aes128ctr_stream.c
+SOURCES		 = main.c aes128.c aes128ctr_stream.c
 CL_SOURCES	 = aes128ctr.cl
 
 OBJECTS		:= ${SOURCES:.c=.o}

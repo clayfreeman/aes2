@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include "aes.h"
-#include "aes128_key.h"
+#include "aes128.h"
 
 void aes128_key_advance(const unsigned char* in, unsigned char* out,
     const unsigned char round_num) {
