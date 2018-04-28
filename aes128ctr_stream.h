@@ -39,8 +39,8 @@ typedef struct {
   unsigned char*     end; // Pointer to the end of the ring buffer
   unsigned char*    read; // The current read pointer in the buffer
   unsigned char*   write; // The current write pointer in the buffer
-  size_t            size; // The number of bytes in the buffer
-  size_t          length; // The number of readable bytes
+  unsigned long     size; // The number of bytes in the buffer
+  unsigned long   length; // The number of readable bytes
   unsigned long    index; // The next AES128 CTR block index
 
   /**
@@ -66,17 +66,21 @@ typedef struct {
    * Variables used to copy back results from the OpenCL device.
    */
   unsigned char*  result; // Host-mapped OpenCL-accessible pinned memory
-  size_t         pending; // The size of pending data in this kernel range
+  unsigned long  pending; // The size of pending data in this kernel range
 } aes128ctr_stream_t;
 
 extern cl_int aes128ctr_stream_map_buffer(void** const map,
   cl_command_queue* const queue, cl_mem* const buffer,
-  const cl_map_flags flags, const size_t offset, const size_t length);
+  const cl_map_flags flags, const unsigned long offset,
+  const unsigned long length);
 
 extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
-  const size_t device, const size_t buffer_block_size,
+  const unsigned long device, const unsigned long buffer_block_size,
   const aes128_key_t* const key, const aes128_nonce_t* const nonce);
 
 extern cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream);
+
+extern unsigned long aes128ctr_stream_encrypt(aes128ctr_stream_t* const stream,
+  unsigned char* const data, unsigned long length);
 
 #endif

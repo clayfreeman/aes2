@@ -43,7 +43,7 @@ void usage(int argc, char* argv[]);
 
 int main(int argc, char* argv[]) {
   FILE*              fp = NULL;
-  size_t           size =    0;
+  unsigned long    size =    0;
   uint64_t       device =    0;
 
   // Ensure that the minimum of three arguments was provided
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
   aes128_key_init(&key);
   // Attempt to initialize the AES128 CTR encryption stream
   aes128ctr_stream_t stream;
-  const size_t count = 1<<4;
+  const unsigned long count = 1UL << 22;
   cl_int code = aes128ctr_stream_init(&stream, device, count, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
@@ -122,38 +122,21 @@ int main(int argc, char* argv[]) {
     return 9;
   }
 
+  unsigned char* test = (unsigned char*)malloc(1UL << 28);
+
   // Create some state to store the status and duration of the ops
-  size_t status = 0;
+  unsigned long status = 0;
   struct timespec start = {0, 0}, end = {0, 0};
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
   // Enqueue the kernel for execution on the OpenCL device
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  code |= aes128ctr_stream_refill(&stream);
-  if (code != CL_SUCCESS) {
-    fprintf(stderr, "OpenCL error: %d\n", code);
-    usage(argc, argv);
-    return 10;
-  }
+  status += aes128ctr_stream_encrypt(&stream, test, 1UL << 28);
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
+  free(test);
   // ### DEBUG
   // Print the mapped memory buffer
-  for (size_t i = 0; i < (count << 4); ++i)
+  for (unsigned long i = 0; i < (16); ++i)
     fprintf(stderr, "%s%02x", (i % 16 == 0 ?
       (i == 0 ? "" : "\n") : " "), stream.read[i]);
   fprintf(stderr, "\n");
@@ -164,10 +147,10 @@ int main(int argc, char* argv[]) {
   memset(nonce.val, 0, sizeof(nonce.val));
   memset(  key.val, 0, sizeof(  key.val));
   // Check the status of the cryption operation
-  if (status != size) {
-    fprintf(stderr, "error: Cryption failed\n");
-    return 127;
-  }
+  // if (status != size) {
+  //   fprintf(stderr, "error: Cryption failed\n");
+  //   return 127;
+  // }
   fprintf(stderr, "success: Crypted %f MB in %f sec (%f MB/s)\n",
     (status / (double)(1 << 20)),  duration,
     (status / (double)(1 << 20)) / duration);
@@ -177,10 +160,10 @@ int main(int argc, char* argv[]) {
 
 void print_devices() {
   // Allocate storage space for required variables
-  size_t     valueSize =    0;
-  cl_uint  deviceCount =    0;
-  char*          value = NULL;
-  cl_device_id* device = NULL;
+  unsigned long valueSize =    0;
+  cl_uint     deviceCount =    0;
+  char*             value = NULL;
+  cl_device_id*    device = NULL;
 
   // Fetch the total number of devices for this platform
   clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);

@@ -10,7 +10,7 @@ BITCODE		+= ${CL_SOURCES:.cl=.gpu32.bc}
 BITCODE		+= ${CL_SOURCES:.cl=.gpu64.bc}
 
 CC		 = cc
-CFLAGS		 = -c -g -std=c11 -Wall -Wextra -pedantic
+CFLAGS		 = -c -g -std=c11 -Wall -Wextra -pedantic -O3
 FRAMEWORKS	 = -framework OpenCL
 
 CLC	 	 = /System/Library/Frameworks/OpenCL.framework/Libraries/openclc

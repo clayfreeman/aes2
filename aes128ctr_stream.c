@@ -49,7 +49,7 @@ const char DGPU64[] = "aes128ctr.gpu64.bc";
  */
 cl_int aes128ctr_stream_create_buffer(cl_mem* const buffer,
     cl_context* const context, const cl_mem_flags flags,
-    const size_t size, void* ptr) {
+    const unsigned long size, void* ptr) {
   // Allocate storage for an error code and attempt to create the buffer
   cl_int status = CL_SUCCESS;
   (*buffer) = clCreateBuffer(*context, flags, size, ptr, &status);
@@ -118,12 +118,12 @@ cl_int aes128ctr_stream_create_kernel(cl_kernel* const kernel,
 cl_int aes128ctr_stream_create_program(cl_program* const program,
     cl_context* const context, cl_device_id* const device) {
   // Create some temporary variables used to create the program
-  const char*     path = NULL;
-  size_t      path_len = 0;
-  cl_uint         bits = 0;
-  cl_device_type  type = 0;
-  cl_int binary_status = CL_SUCCESS;
-  cl_int        status = CL_INVALID_DEVICE;
+  const char*       path = NULL;
+  unsigned long path_len = 0;
+  cl_uint           bits = 0;
+  cl_device_type    type = 0;
+  cl_int   binary_status = CL_SUCCESS;
+  cl_int          status = CL_INVALID_DEVICE;
   // Fetch the device category and bit length information
   clGetDeviceInfo(*device, CL_DEVICE_ADDRESS_BITS, sizeof(bits), &bits, NULL);
   clGetDeviceInfo(*device, CL_DEVICE_TYPE,         sizeof(type), &type, NULL);
@@ -170,7 +170,7 @@ cl_int aes128ctr_stream_create_program(cl_program* const program,
  *                  `CL_DEVICE_NOT_FOUND` (19) if no such device.
  */
 cl_int aes128ctr_stream_get_device_by_index(cl_device_id* const device,
-    const size_t index) {
+    const unsigned long index) {
   // Allocate storage space for required variables
   cl_uint  device_count =    0;
   cl_device_id* devices = NULL;
@@ -206,7 +206,8 @@ cl_int aes128ctr_stream_get_device_by_index(cl_device_id* const device,
  */
 cl_int aes128ctr_stream_map_buffer(void** const map,
     cl_command_queue* const queue, cl_mem* const buffer,
-    const cl_map_flags flags, const size_t offset, const size_t length) {
+    const cl_map_flags flags, const unsigned long offset,
+    const unsigned long length) {
   // Allocate storage for an error code and attempt to create the kernel
   cl_int status = CL_SUCCESS;
   (*map) = (unsigned char*)clEnqueueMapBuffer(*queue, *buffer, CL_TRUE, flags,
@@ -227,7 +228,7 @@ cl_int aes128ctr_stream_map_buffer(void** const map,
  * @return                     An OpenCL status (error) code.
  */
 cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
-    const size_t device, const size_t buffer_block_size,
+    const unsigned long device, const unsigned long buffer_block_size,
     const aes128_key_t* const key, const aes128_nonce_t* const nonce) {
   // Create a temporary status variable for error checking
   cl_int status   = CL_SUCCESS;
@@ -263,7 +264,7 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
     CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
-    MIN(AES128CTR_STREAM_MAX_KERNELS, stream->size), NULL);
+    MIN(AES128CTR_STREAM_MAX_KERNELS << 4, stream->size), NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
@@ -303,10 +304,10 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
 cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
   cl_int status = CL_SUCCESS;
   // Determine the number of kernels that should be launched to refill
-  stream->pending = MIN(AES128CTR_STREAM_MAX_KERNELS,
-    (stream->size - stream->length) >> 4) << 4;
+  stream->pending = MIN(AES128CTR_STREAM_MAX_KERNELS << 4,
+    (stream->size - stream->length));
   // Calculate the number of kernels that should be executed
-  size_t count = stream->pending >> 4;
+  unsigned long count = stream->pending >> 4;
   // Only attempt to refill the buffer if not already full
   if (count > 0) {
     // Set the block index offset kernel argument
@@ -329,7 +330,7 @@ cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
     // Determine if this refill crosses the boundary of the buffer
     if (stream->write + stream->pending > stream->end) {
       // Perform the first copy operation following the write pointer
-      size_t partial = stream->end - stream->write;
+      unsigned long partial = stream->end - stream->write;
       memcpy(stream->write, stream->result, partial);
       stream->write    = stream->start;
       stream->result  += partial;
@@ -349,4 +350,39 @@ cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
     stream->result = NULL;
   }
   return status;
+}
+
+/**
+ * [aes128ctr_stream_encrypt description]
+ *
+ * @param   stream  [description]
+ * @param   data    [description]
+ * @param   length  [description]
+ *
+ * @return          [description]
+ */
+unsigned long aes128ctr_stream_encrypt(aes128ctr_stream_t* const stream,
+    unsigned char* const data, unsigned long length) {
+  // Check if the ring buffer needs to be refilled
+  while (stream->length < stream->size >> 1)
+    // Refill the ring buffer by calculating more ciphertext data
+    aes128ctr_stream_refill(stream);
+  // Iterate over each character in the provided buffer
+  unsigned long bytes_encrypted = 0;
+  for (; bytes_encrypted < length; ++bytes_encrypted) {
+    // Decrease the available amount of data in the read buffer
+    --stream->length;
+    // Post-increment the read pointer and dereference the current byte
+    data[bytes_encrypted] ^= *(stream->read++);
+    // Check if the read pointer needs to wrap around
+    if (stream->read == stream->end)
+      // Set the read pointer to the start of the ring buffer
+      stream->read = stream->start;
+    // Check if the ring buffer needs to be refilled
+    if (stream->length < stream->size >> 1)
+      // Refill the ring buffer by calculating more ciphertext data
+      aes128ctr_stream_refill(stream);
+  }
+  // Return the number of bytes successfully encrypted
+  return bytes_encrypted;
 }
