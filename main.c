@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
   aes128_key_init(&key);
   // Attempt to initialize the AES128 CTR encryption stream
   aes128ctr_stream_t stream;
-  const unsigned long count = 1UL << 22;
+  const unsigned long count = 1 << 24;
   cl_int code = aes128ctr_stream_init(&stream, device, count, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
@@ -122,7 +122,8 @@ int main(int argc, char* argv[]) {
     return 9;
   }
 
-  unsigned char* test = (unsigned char*)malloc(1UL << 28);
+  unsigned long  _size = 1 << 24;
+  unsigned char*  test = (unsigned char*)malloc(_size << 4);
 
   // Create some state to store the status and duration of the ops
   unsigned long status = 0;
@@ -130,17 +131,18 @@ int main(int argc, char* argv[]) {
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
   // Enqueue the kernel for execution on the OpenCL device
-  status += aes128ctr_stream_encrypt(&stream, test, 1UL << 28);
+  aes128ctr_stream_crypt_buffer(&stream, test, _size << 4);
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
+  status = _size << 4;
+  // // ### DEBUG
+  // // Print the mapped memory buffer
+  // for (unsigned long i = 0; i < (_size << 4); ++i)
+  //   fprintf(stderr, "%s%02x", (i % 16 == 0 ?
+  //     (i == 0 ? "" : "\n") : " "), ((unsigned char*)test)[i]);
+  // fprintf(stderr, "\n");
+  // // ### DEBUG
   free(test);
-  // ### DEBUG
-  // Print the mapped memory buffer
-  for (unsigned long i = 0; i < (16); ++i)
-    fprintf(stderr, "%s%02x", (i % 16 == 0 ?
-      (i == 0 ? "" : "\n") : " "), stream.read[i]);
-  fprintf(stderr, "\n");
-  // ### DEBUG
   timespec_diff(&start, &end);
   double duration = ((double)end.tv_sec + (end.tv_nsec / 1E9f));
   // Zero-initialize the nonce and key for security

@@ -23,12 +23,16 @@
 #include "aes.h"
 
 typedef struct {
+  unsigned char val[176];
+} aes128_key_t;
+
+typedef struct {
   unsigned char val[8];
 } aes128_nonce_t;
 
 typedef struct {
-  unsigned char val[176];
-} aes128_key_t;
+  unsigned char val[16];
+} aes128_state_t;
 
 extern void aes128_key_init(aes128_key_t* key);
 

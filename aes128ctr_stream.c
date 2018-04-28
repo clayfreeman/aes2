@@ -233,13 +233,9 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   // Create a temporary status variable for error checking
   cl_int status   = CL_SUCCESS;
   // Allocate the bytes required to store the requested number of blocks
-  stream->size    = buffer_block_size << 4;
-  stream->start   = (unsigned char*)malloc(stream->size);
+  stream->size    = buffer_block_size;
+  stream->start   = (aes128_state_t*)malloc(stream->size << 4);
   if (stream->start == NULL) return CL_MEM_OBJECT_ALLOCATION_FAILURE;
-  // Initialize the remainder of pointers for the stream
-  stream->end     = stream->start + stream->size;
-  stream->read    = stream->start;
-  stream->write   = stream->start;
   // Zero-initialize the length, block index and pending bytes count
   stream->length  = 0;
   stream->index   = 0;
@@ -264,7 +260,7 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_stream_create_buffer(&stream->_st, &stream->context,
     CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
-    MIN(AES128CTR_STREAM_MAX_KERNELS << 4, stream->size), NULL);
+    MIN(AES128CTR_STREAM_MAX_KERNELS, stream->size) << 4, NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_stream_create_buffer(&stream->_sb, &stream->context,
@@ -304,19 +300,17 @@ cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
 cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
   cl_int status = CL_SUCCESS;
   // Determine the number of kernels that should be launched to refill
-  stream->pending = MIN(AES128CTR_STREAM_MAX_KERNELS << 4,
+  stream->pending = MIN(AES128CTR_STREAM_MAX_KERNELS,
     (stream->size - stream->length));
-  // Calculate the number of kernels that should be executed
-  unsigned long count = stream->pending >> 4;
   // Only attempt to refill the buffer if not already full
-  if (count > 0) {
+  if (stream->pending > 0) {
     // Set the block index offset kernel argument
     status = clSetKernelArg(stream->kernel, 5,
       sizeof(stream->index), &stream->index);
     if (status != CL_SUCCESS) return status;
     // Enqueue the pending number of kernels to the OpenCL device for execution
     status = clEnqueueNDRangeKernel(stream->queue, stream->kernel, 1,
-      NULL, &count, NULL, 0, NULL, NULL);
+      NULL, &stream->pending, NULL, 0, NULL, NULL);
     if (status != CL_SUCCESS) return status;
     // Map the result buffer to the OpenCL device state output
     status = aes128ctr_stream_map_buffer((void**)&stream->result,
@@ -325,64 +319,72 @@ cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream) {
     // Wait until the queue is flushed before continuing
     status = clFinish(stream->queue);
     if (status != CL_SUCCESS) return status;
+    // Calculate the buffer offset based on the current block index
+    unsigned long offset = stream->index % stream->size;
     // Increment the next block index based on the kernel count
-    stream->index += count;
+    stream->index += stream->pending;
     // Determine if this refill crosses the boundary of the buffer
-    if (stream->write + stream->pending > stream->end) {
+    if (offset + stream->pending > stream->size) {
       // Perform the first copy operation following the write pointer
-      unsigned long partial = stream->end - stream->write;
-      memcpy(stream->write, stream->result, partial);
-      stream->write    = stream->start;
+      unsigned long partial = stream->size - offset;
+      memcpy(stream->start + offset, stream->result, partial << 4);
       stream->result  += partial;
       stream->length  += partial;
       stream->pending -= partial;
+      offset           = 0;
     }
     // Perform the final copy operation to refill the buffer
-    memcpy(stream->write, stream->result, stream->pending);
-    stream->write  += stream->pending;
-    stream->result += stream->pending;
+    memcpy(stream->start + offset, stream->result, stream->pending << 4);
     stream->length += stream->pending;
     stream->pending = 0;
     // Unmap the pinned memory region of the OpenCL device state
     status = (cl_int)clEnqueueUnmapMemObject(stream->queue, stream->_st,
       stream->result, 0, NULL, NULL);
-    if (status != CL_SUCCESS) return status;
     stream->result = NULL;
+    if (status != CL_SUCCESS) return status;
   }
   return status;
 }
 
-/**
- * [aes128ctr_stream_encrypt description]
- *
- * @param   stream  [description]
- * @param   data    [description]
- * @param   length  [description]
- *
- * @return          [description]
- */
-unsigned long aes128ctr_stream_encrypt(aes128ctr_stream_t* const stream,
-    unsigned char* const data, unsigned long length) {
-  // Check if the ring buffer needs to be refilled
-  while (stream->length < stream->size >> 1)
-    // Refill the ring buffer by calculating more ciphertext data
-    aes128ctr_stream_refill(stream);
-  // Iterate over each character in the provided buffer
-  unsigned long bytes_encrypted = 0;
-  for (; bytes_encrypted < length; ++bytes_encrypted) {
-    // Decrease the available amount of data in the read buffer
-    --stream->length;
-    // Post-increment the read pointer and dereference the current byte
-    data[bytes_encrypted] ^= *(stream->read++);
-    // Check if the read pointer needs to wrap around
-    if (stream->read == stream->end)
-      // Set the read pointer to the start of the ring buffer
-      stream->read = stream->start;
-    // Check if the ring buffer needs to be refilled
-    if (stream->length < stream->size >> 1)
-      // Refill the ring buffer by calculating more ciphertext data
+void aes128ctr_stream_crypt(aes128ctr_stream_t* const stream,
+    aes128_state_t* const state) {
+  // Calculate the current block offset
+  unsigned long offset = (stream->index - stream->length) % stream->size;
+  // Decrement the available blocks in the ring buffer
+  --stream->length;
+  // XOR the state block with the block in the ring buffer
+  for (unsigned long i = 0; i < sizeof(*state); ++i)
+    state->val[i] ^= stream->start[offset].val[i];
+}
+
+void aes128ctr_stream_crypt_buffer(aes128ctr_stream_t* const stream,
+    unsigned char* data, unsigned long length) {
+  // Calculate the number of whole blocks in the buffer
+  unsigned long total_blocks = length >> 4;
+  // Split the buffer into groups of blocks that fit in the stream
+  if (total_blocks > 0) do {
+    // Check if the buffer needs to be filled up
+    while (stream->length < stream->size)
       aes128ctr_stream_refill(stream);
+    // Iterate over each whole block in the buffer
+    unsigned long blocks = MIN(total_blocks, stream->size);
+    aes128_state_t* state = (aes128_state_t*)data;
+    for (unsigned long i = 0; i < blocks; ++i)
+      aes128ctr_stream_crypt(stream, state + i);
+    // Adjust the status variables to reflect the progress
+    total_blocks -= blocks;
+    length       -= blocks << 4;
+    data         += blocks << 4;
+  } while (total_blocks > 0);
+  // Check if there is a partial block of data remaining
+  if (length > 0) {
+    // Check if the buffer needs to be filled up
+    if (stream->length == 0)
+      aes128ctr_stream_refill(stream);
+    // Encrypt the remaining length by truncating a block
+    aes128_state_t state;
+    memcpy(state.val, data, length);
+    aes128ctr_stream_crypt(stream, &state);
+    memcpy(data, state.val, length);
   }
-  // Return the number of bytes successfully encrypted
-  return bytes_encrypted;
 }
