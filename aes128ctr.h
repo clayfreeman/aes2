@@ -33,7 +33,7 @@
 typedef struct {
   /**
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
-   * kernel that is responsible for generating the XOR data stream.
+   * kernel that is responsible for encrypting input data.
    */
   cl_device_id    device; // The OpenCL device ID
   cl_context     context; // The OpenCL execution context
@@ -50,13 +50,15 @@ typedef struct {
   cl_mem              _k; // The prepared key space for each AES round
   cl_mem              _n; // The constant nonce value used for CTR mode
   unsigned long    index; // The next block index to be encrypted
-} aes128ctr_t;
+} aes128ctr_context_t;
 
-extern cl_int aes128ctr_init(aes128ctr_t* const stream,
+extern cl_int aes128ctr_init(aes128ctr_context_t* const context,
   const unsigned long device, const aes128_key_t* const key,
   const aes128_nonce_t* const nonce);
 
-extern unsigned long aes128ctr_crypt_blocks(
-  aes128ctr_t* const stream, aes128_state_t* data, unsigned long count);
+extern void aes128ctr_destroy(aes128ctr_context_t* const context);
+
+extern unsigned long aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
+  aes128_state_t* data, unsigned long count);
 
 #endif

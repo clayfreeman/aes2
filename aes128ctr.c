@@ -192,109 +192,138 @@ cl_int aes128ctr_get_device_by_index(cl_device_id* const device,
 }
 
 /**
- * Initializes an AES128 CTR data stream instance for a specific OpenCL device.
+ * Initializes an AES128 CTR context for cryption on a specific OpenCL device.
  *
- * @param   stream  The zero-index of the desired OpenCL device.
- * @param   device  The zero-index of the desired OpenCL device.
- * @param   key     The key used to encrypt the plaintext input.
- * @param   nonce   The nonce used for the CTR block cipher mode.
+ * @param   context  The AES128 CTR context to be initialized.
+ * @param   device   The zero-index of the desired OpenCL device.
+ * @param   key      The key used to encrypt the plaintext input.
+ * @param   nonce    The nonce used for the CTR block cipher mode.
  *
- * @return          An OpenCL status (error) code.
+ * @return           An OpenCL status (error) code.
  */
-cl_int aes128ctr_init(aes128ctr_t* const stream,
+cl_int aes128ctr_init(aes128ctr_context_t* const context,
     const unsigned long device, const aes128_key_t* const key,
     const aes128_nonce_t* const nonce) {
   // Create a temporary status variable for error checking
   cl_int status = CL_SUCCESS;
-  // Zero-initialize the next block index
-  stream->index = 0;
+  // Zero-initialize the structure before first use
+  memset(context, 0, sizeof(*context));
   // Attempt to fetch the OpenCL device ID of the preferred device by index
-  status = aes128ctr_get_device_by_index(&stream->device, device);
+  status = aes128ctr_get_device_by_index(&context->device, device);
   if (status != CL_SUCCESS) return status;
   // Attempt to create an OpenCL execution context with the device
-  status = aes128ctr_create_context(&stream->context, &stream->device);
+  status = aes128ctr_create_context(&context->context, &context->device);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a command queue for this context and device
-  status = aes128ctr_create_command_queue(&stream->queue,
-    &stream->context, &stream->device);
+  status = aes128ctr_create_command_queue(&context->queue,
+    &context->context, &context->device);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a program for this context and device
-  status = aes128ctr_create_program(&stream->program,
-    &stream->context, &stream->device);
+  status = aes128ctr_create_program(&context->program,
+    &context->context, &context->device);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a kernel for this program
-  status = aes128ctr_create_kernel(&stream->kernel, &stream->program);
+  status = aes128ctr_create_kernel(&context->kernel, &context->program);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a pinned memory buffer for storing results
-  status = aes128ctr_create_buffer(&stream->_st, &stream->context,
+  status = aes128ctr_create_buffer(&context->_st, &context->context,
     CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
     AES128CTR_MAX_KERNELS << 4, NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
-  status = aes128ctr_create_buffer(&stream->_sb, &stream->context,
+  status = aes128ctr_create_buffer(&context->_sb, &context->context,
     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(aes_sbox), (void*)aes_sbox);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the 2x Galois field of 2**8
-  status = aes128ctr_create_buffer(&stream->_g2, &stream->context,
+  status = aes128ctr_create_buffer(&context->_g2, &context->context,
     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(aes_gal2), (void*)aes_gal2);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the key
-  status = aes128ctr_create_buffer(&stream->_k, &stream->context,
+  status = aes128ctr_create_buffer(&context->_k, &context->context,
     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(*key), (void*)key);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the nonce
-  status = aes128ctr_create_buffer(&stream->_n, &stream->context,
+  status = aes128ctr_create_buffer(&context->_n, &context->context,
     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(*nonce), (void*)nonce);
   if (status != CL_SUCCESS) return status;
   // Assign each memory buffer argument to the kernel
-  status = clSetKernelArg(stream->kernel, 0,
-    sizeof(stream->_st), (void*)&stream->_st);
+  status = clSetKernelArg(context->kernel, 0,
+    sizeof(context->_st), (void*)&context->_st);
   if (status != CL_SUCCESS) return status;
-  status = clSetKernelArg(stream->kernel, 1,
-    sizeof(stream->_sb), (void*)&stream->_sb);
+  status = clSetKernelArg(context->kernel, 1,
+    sizeof(context->_sb), (void*)&context->_sb);
   if (status != CL_SUCCESS) return status;
-  status = clSetKernelArg(stream->kernel, 2,
-    sizeof(stream->_g2), (void*)&stream->_g2);
+  status = clSetKernelArg(context->kernel, 2,
+    sizeof(context->_g2), (void*)&context->_g2);
   if (status != CL_SUCCESS) return status;
-  status = clSetKernelArg(stream->kernel, 3,
-    sizeof(stream->_k ), (void*)&stream->_k );
+  status = clSetKernelArg(context->kernel, 3,
+    sizeof(context->_k ), (void*)&context->_k );
   if (status != CL_SUCCESS) return status;
-  status = clSetKernelArg(stream->kernel, 4,
-    sizeof(stream->_n ), (void*)&stream->_n );
+  status = clSetKernelArg(context->kernel, 4,
+    sizeof(context->_n ), (void*)&context->_n );
   if (status != CL_SUCCESS) return status;
   return status;
 }
 
-unsigned long aes128ctr_crypt_blocks(aes128ctr_t* const stream,
+/**
+ * Release all resources used by the underlying data structure.
+ *
+ * @param  context  The AES128 CTR context to be destroyed.
+ */
+void aes128ctr_destroy(aes128ctr_context_t* const context) {
+  // Attempt to zero-out the sensitive key and nonce buffers
+  unsigned char zero = 0;
+  clEnqueueFillBuffer(context->queue, context->_k, &zero, sizeof(zero), 0,
+    sizeof(aes128_key_t), 0, NULL, NULL);
+  clEnqueueFillBuffer(context->queue, context->_n, &zero, sizeof(zero), 0,
+    sizeof(aes128_key_t), 0, NULL, NULL);
+  clFinish(context->queue);
+  // Release all OpenCL buffers used during kernel execution
+  clReleaseMemObject(context->_st);
+  clReleaseMemObject(context->_sb);
+  clReleaseMemObject(context->_g2);
+  clReleaseMemObject(context->_k);
+  clReleaseMemObject(context->_n);
+  // Release the OpenCL application kernel
+  clReleaseKernel(context->kernel);
+  // Release the OpenCL device-compiled program binary
+  clReleaseProgram(context->program);
+  // Release the OpenCL command queue
+  clReleaseCommandQueue(context->queue);
+  // Release the OpenCL execution context
+  clReleaseContext(context->context);
+}
+
+unsigned long aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
     aes128_state_t* data, unsigned long count) {
   cl_int       status = CL_SUCCESS;
   // Keep track of the amount of encrypted blocks
-  unsigned long start = stream->index;
+  unsigned long start = context->index;
   // Continue processing data until the request is satisfied
   while (status == CL_SUCCESS && count > 0) {
     // Determine the number of blocks to encrypt this round
     unsigned long blocks = MIN(AES128CTR_MAX_KERNELS, count);
     // Write the input data into the encryption buffer
-    status = clEnqueueWriteBuffer(stream->queue, stream->_st, CL_TRUE,
+    status = clEnqueueWriteBuffer(context->queue, context->_st, CL_FALSE,
       0, blocks << 4, data, 0, NULL, NULL);
     if (status != CL_SUCCESS) break;
     // Set the block index offset kernel argument
-    status = clSetKernelArg(stream->kernel, 5,
-      sizeof(stream->index), &stream->index);
+    status = clSetKernelArg(context->kernel, 5,
+      sizeof(context->index), &context->index);
     if (status != CL_SUCCESS) return status;
     // Enqueue the pending number of kernels to the OpenCL device for execution
-    status = clEnqueueNDRangeKernel(stream->queue, stream->kernel, 1,
+    status = clEnqueueNDRangeKernel(context->queue, context->kernel, 1,
       NULL, &blocks, NULL, 0, NULL, NULL);
     if (status != CL_SUCCESS) return status;
     // Write the input data into the encryption buffer
-    status = clEnqueueReadBuffer (stream->queue, stream->_st, CL_TRUE,
+    status = clEnqueueReadBuffer (context->queue, context->_st, CL_TRUE,
       0, blocks << 4, data, 0, NULL, NULL);
     if (status != CL_SUCCESS) break;
     // Increment the data pointer and block index
-    stream->index += blocks;
-    data          += blocks;
-    count         -= blocks;
+    context->index += blocks;
+    data           += blocks;
+    count          -= blocks;
   }
   // Return the number of encrypted blocks
-  return stream->index - start;
+  return context->index - start;
 }

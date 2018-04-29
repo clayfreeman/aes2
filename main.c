@@ -110,49 +110,88 @@ int main(int argc, char* argv[]) {
     return 8;
   }
 
+  // Create some state to store the status and duration of the ops
+  unsigned long status = 0;
+  struct timespec start = {0, 0}, end = {0, 0};
+
+  // Create a buffer used to encrypt the file contents
+  unsigned char* buf = (unsigned char*)malloc(AES128CTR_MAX_KERNELS << 4);
+
   // Attempt to initialize the AES128 key
   aes128_key_init(&key);
-  // Attempt to initialize the AES128 CTR encryption stream
-  aes128ctr_t stream;
-  cl_int code = aes128ctr_init(&stream, device, &key, &nonce);
+  // Attempt to initialize the AES128 CTR context
+  aes128ctr_context_t context;
+  cl_int code = aes128ctr_init(&context, device, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
     return 9;
   }
 
-  unsigned long  _size = 1 << 26;
-  unsigned char*  test = (unsigned char*)malloc(_size << 4);
-  memset(test, 0, _size << 4);
+  // Attempt to open the FILE at the path held by the first argument
+  FILE* ifp = NULL; FILE* ofp = NULL;
+  if ((ifp = fopen(argv[1], "rb" )) == NULL ||
+      (ofp = fopen(argv[1], "r+b")) == NULL) {
+    perror("file: fopen()");
+    usage(argc, argv);
+    return 10;
+  }
 
-  // Create some state to store the status and duration of the ops
-  unsigned long status = 0;
-  struct timespec start = {0, 0}, end = {0, 0};
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
-  // Enqueue the kernel for execution on the OpenCL device
-  status = aes128ctr_crypt_blocks(&stream,
-    (aes128_state_t*)test, _size) << 4;
+
+  while (!feof(ifp) && !ferror(ifp) && !ferror(ofp)) {
+    // Attempt to read as many blocks for this worker as max kernels
+    unsigned long  length = fread(buf, 16, AES128CTR_MAX_KERNELS, ifp) << 4;
+    // Check to see that the requested number of blocks could not be read
+    if (length < (AES128CTR_MAX_KERNELS << 4)) {
+      fseek(ifp, status + length, SEEK_SET);
+      // Attempt to read a partial block into the next block
+      unsigned long bytes = fread(buf + length, 1, 16, ifp);
+      // If we read non-zero bytes, then increment the length
+      if (bytes > 0) length += bytes;
+    }
+    // Enqueue the kernel for execution on the OpenCL device
+    aes128ctr_crypt_blocks(&context, (aes128_state_t*)buf,
+      (length >> 4) + ((length & 15) > 0 ? 1 : 0));
+    // Write the total encrypted length to the output file
+    status += fwrite(buf, 1, length, ofp);
+  }
+
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);
-  // ### DEBUG
-  // Print the mapped memory buffer
-  for (unsigned long i = (_size - 16) << 4; i < (_size << 4); ++i)
+
+  // #define DEBUG
+
+  // Close the provided file to flush its contents
+  fclose(ifp); fclose(ofp); ifp = ofp = NULL;
+  // Destroy the AES128 CTR context
+  aes128ctr_destroy(&context);
+  #ifndef DEBUG
+  // Free the buffer used for file encryption
+  free(buf);
+  #endif
+
+  #ifdef DEBUG
+  // Print the memory buffer to show the most recent data
+  for (unsigned long i = 0; i < 256; ++i)
     fprintf(stderr, "%s%02x", (i % 16 == 0 ?
-      (i == 0 ? "" : "\n") : " "), ((unsigned char*)test)[i]);
+      (i == 0 ? "" : "\n") : " "), ((unsigned char*)buf)[i]);
   fprintf(stderr, "\n");
-  // ### DEBUG
-  free(test);
+  // Free the buffer used for file encryption
+  free(buf);
+  #endif
+
   timespec_diff(&start, &end);
   double duration = ((double)end.tv_sec + (end.tv_nsec / 1E9f));
   // Zero-initialize the nonce and key for security
   memset(nonce.val, 0, sizeof(nonce.val));
   memset(  key.val, 0, sizeof(  key.val));
   // Check the status of the cryption operation
-  // if (status != size) {
-  //   fprintf(stderr, "error: Cryption failed\n");
-  //   return 127;
-  // }
+  if (status != size) {
+    fprintf(stderr, "error: Cryption failed\n");
+    return 127;
+  }
   fprintf(stderr, "success: Crypted %f MB in %f sec (%f MB/s)\n",
     (status / (double)(1 << 20)),  duration,
     (status / (double)(1 << 20)) / duration);
