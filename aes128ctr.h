@@ -28,7 +28,7 @@
   #include <CL/opencl.h>
 #endif
 
-#define aes128ctr_MAX_KERNELS 1UL << 20
+#define AES128CTR_MAX_KERNELS 1UL << 20
 
 typedef struct {
   /**

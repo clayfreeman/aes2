@@ -228,7 +228,7 @@ cl_int aes128ctr_init(aes128ctr_t* const stream,
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_create_buffer(&stream->_st, &stream->context,
     CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
-    aes128ctr_MAX_KERNELS << 4, NULL);
+    AES128CTR_MAX_KERNELS << 4, NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_create_buffer(&stream->_sb, &stream->context,
@@ -273,7 +273,7 @@ unsigned long aes128ctr_crypt_blocks(aes128ctr_t* const stream,
   // Continue processing data until the request is satisfied
   while (status == CL_SUCCESS && count > 0) {
     // Determine the number of blocks to encrypt this round
-    unsigned long blocks = MIN(aes128ctr_MAX_KERNELS, count);
+    unsigned long blocks = MIN(AES128CTR_MAX_KERNELS, count);
     // Write the input data into the encryption buffer
     status = clEnqueueWriteBuffer(stream->queue, stream->_st, CL_TRUE,
       0, blocks << 4, data, 0, NULL, NULL);
