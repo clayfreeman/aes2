@@ -32,7 +32,7 @@
 #include <OpenCL/OpenCL.h>
 
 #include "aes128.h"
-#include "aes128ctr_stream.h"
+#include "aes128ctr.h"
 
 aes128_key_t     key;
 aes128_nonce_t nonce;
@@ -113,8 +113,8 @@ int main(int argc, char* argv[]) {
   // Attempt to initialize the AES128 key
   aes128_key_init(&key);
   // Attempt to initialize the AES128 CTR encryption stream
-  aes128ctr_stream_t stream;
-  cl_int code = aes128ctr_stream_init(&stream, device, &key, &nonce);
+  aes128ctr_t stream;
+  cl_int code = aes128ctr_init(&stream, device, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
   // Begin tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &start);
   // Enqueue the kernel for execution on the OpenCL device
-  status = aes128ctr_stream_crypt_blocks(&stream,
+  status = aes128ctr_crypt_blocks(&stream,
     (aes128_state_t*)test, _size) << 4;
   // Finish tracking time required to execute
   clock_gettime(CLOCK_MONOTONIC, &end);

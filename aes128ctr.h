@@ -28,7 +28,7 @@
   #include <CL/opencl.h>
 #endif
 
-#define AES128CTR_STREAM_MAX_KERNELS 1UL << 20
+#define aes128ctr_MAX_KERNELS 1UL << 20
 
 typedef struct {
   /**
@@ -50,13 +50,13 @@ typedef struct {
   cl_mem              _k; // The prepared key space for each AES round
   cl_mem              _n; // The constant nonce value used for CTR mode
   unsigned long    index; // The next block index to be encrypted
-} aes128ctr_stream_t;
+} aes128ctr_t;
 
-extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
+extern cl_int aes128ctr_init(aes128ctr_t* const stream,
   const unsigned long device, const aes128_key_t* const key,
   const aes128_nonce_t* const nonce);
 
-extern unsigned long aes128ctr_stream_crypt_blocks(
-  aes128ctr_stream_t* const stream, aes128_state_t* data, unsigned long count);
+extern unsigned long aes128ctr_crypt_blocks(
+  aes128ctr_t* const stream, aes128_state_t* data, unsigned long count);
 
 #endif
