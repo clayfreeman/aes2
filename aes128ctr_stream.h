@@ -32,15 +32,6 @@
 
 typedef struct {
   /**
-   * Variables pertaining to the ring buffer that is used to hold intermediary
-   * AES128 CTR data that is to be XOR'ed with plain text.
-   */
-  aes128_state_t*  start; // Pointer to the beginning of the ring buffer
-  unsigned long     size; // The number of blocks in the buffer
-  unsigned long    index; // The next AES128 CTR block index
-  unsigned long   length; // The number of readable blocks
-
-  /**
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
    * kernel that is responsible for generating the XOR data stream.
    */
@@ -58,29 +49,14 @@ typedef struct {
   cl_mem             _g2; // The "times 2" Galois field 2**8
   cl_mem              _k; // The prepared key space for each AES round
   cl_mem              _n; // The constant nonce value used for CTR mode
-
-  /**
-   * Variables used to copy back results from the OpenCL device.
-   */
-  aes128_state_t* result; // Host-mapped OpenCL-accessible pinned memory
-  unsigned long  pending; // The number of pending kernels
+  unsigned long    index; // The next block index to be encrypted
 } aes128ctr_stream_t;
 
-extern cl_int aes128ctr_stream_map_buffer(void** const map,
-  cl_command_queue* const queue, cl_mem* const buffer,
-  const cl_map_flags flags, const unsigned long offset,
-  const unsigned long length);
-
 extern cl_int aes128ctr_stream_init(aes128ctr_stream_t* const stream,
-  const unsigned long device, const unsigned long buffer_block_size,
-  const aes128_key_t* const key, const aes128_nonce_t* const nonce);
+  const unsigned long device, const aes128_key_t* const key,
+  const aes128_nonce_t* const nonce);
 
-extern cl_int aes128ctr_stream_refill(aes128ctr_stream_t* const stream);
-
-extern void aes128ctr_stream_crypt(aes128ctr_stream_t* const stream,
-  aes128_state_t* const state);
-
-extern void aes128ctr_stream_crypt_buffer(aes128ctr_stream_t* const stream,
-  unsigned char* data, unsigned long length);
+extern unsigned long aes128ctr_stream_crypt_blocks(
+  aes128ctr_stream_t* const stream, aes128_state_t* data, unsigned long count);
 
 #endif
