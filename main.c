@@ -42,12 +42,13 @@ void timespec_diff(const struct timespec* start, struct timespec* end);
 void usage(int argc, char* argv[]);
 
 int main(int argc, char* argv[]) {
-  FILE*              fp = NULL;
-  unsigned long    size =    0;
-  uint64_t       device =    0;
+  FILE*        fp = NULL;
+  uint64_t   size =    0;
+  uint64_t device =    0;
+  uint64_t  limit =    0;
 
-  // Ensure that the minimum of three arguments was provided
-  if (argc < 5) {
+  // Ensure that the minimum number of arguments was provided
+  if (argc < 6) {
     fprintf(stderr, "error: Not enough arguments.\n");
     usage(argc, argv);
     return 1;
@@ -72,20 +73,29 @@ int main(int argc, char* argv[]) {
     return 3;
   }
 
+  errno = 0;
+  // Attempt to read the LIMIT held by the third argument
+  limit = strtoull(argv[3], NULL, 10);
+  if (errno != 0) {
+    perror("limit: strtoull()");
+    usage(argc, argv);
+    return 4;
+  }
+
   // Ensure that the provided KEY argument is the correct length
-  if (strlen(argv[3]) != 32) {
+  if (strlen(argv[4]) != 32) {
     fprintf(stderr, "error: key must be 32 hexadecimal characters\n");
     usage(argc, argv);
     return 5;
   }
   errno = 0;
   // Attempt to read the low portion of the key first
-  { uint64_t tmp = htonll(strtoull(argv[3] + 16, NULL, 16));
+  { uint64_t tmp = htonll(strtoull(argv[4] + 16, NULL, 16));
   memcpy(key.val + 8, &tmp, 8); tmp = 0; }
   // Replace the first byte of the low portion with a NULL character
-  argv[3][16] = 0;
+  argv[4][16] = 0;
   // Finally, attempt to read the high portion of the key
-  { uint64_t tmp = htonll(strtoull(argv[3],      NULL, 16));
+  { uint64_t tmp = htonll(strtoull(argv[4],      NULL, 16));
   memcpy(key.val,     &tmp, 8); tmp = 0; }
   // Check for an error during either HIGH/LOW strtoull() operation
   if (errno != 0) {
@@ -95,14 +105,14 @@ int main(int argc, char* argv[]) {
   }
 
   // Ensure that the provided NONCE argument is the correct length
-  if (strlen(argv[4]) != 16) {
+  if (strlen(argv[5]) != 16) {
     fprintf(stderr, "error: nonce must be 16 hexadecimal characters\n");
     usage(argc, argv);
     return 7;
   }
   errno = 0;
-  // Attempt to read the NONCE held by the second argument
-  { uint64_t tmp = htonll(strtoull(argv[4], NULL, 16));
+  // Attempt to read the NONCE held by the fifth argument
+  { uint64_t tmp = htonll(strtoull(argv[5], NULL, 16));
   memcpy(nonce.val, &tmp, 8); tmp = 0; }
   if (errno != 0) {
     perror("nonce: strtoull()");
@@ -111,17 +121,17 @@ int main(int argc, char* argv[]) {
   }
 
   // Create some state to store the status and duration of the ops
-  unsigned long status = 0;
+  uint64_t status = 0;
   struct timespec start = {0, 0}, end = {0, 0};
 
   // Create a buffer used to encrypt the file contents
-  unsigned char* buf = (unsigned char*)malloc(AES128CTR_MAX_KERNELS << 4);
+  unsigned char* buf = (unsigned char*)malloc(limit << 4);
 
   // Attempt to initialize the AES128 key
   aes128_key_init(&key);
   // Attempt to initialize the AES128 CTR context
   aes128ctr_context_t context;
-  cl_int code = aes128ctr_init(&context, device, &key, &nonce);
+  cl_int code = aes128ctr_init(&context, device, limit, &key, &nonce);
   if (code != CL_SUCCESS) {
     fprintf(stderr, "OpenCL error: %d\n", code);
     usage(argc, argv);
@@ -142,12 +152,12 @@ int main(int argc, char* argv[]) {
 
   while (!feof(ifp) && !ferror(ifp) && !ferror(ofp)) {
     // Attempt to read as many blocks for this worker as max kernels
-    unsigned long  length = fread(buf, 16, AES128CTR_MAX_KERNELS, ifp) << 4;
+    uint64_t  length = fread(buf, 16, limit, ifp) << 4;
     // Check to see that the requested number of blocks could not be read
-    if (length < (AES128CTR_MAX_KERNELS << 4)) {
+    if (length < (limit << 4)) {
       fseek(ifp, status + length, SEEK_SET);
       // Attempt to read a partial block into the next block
-      unsigned long bytes = fread(buf + length, 1, 16, ifp);
+      uint64_t bytes = fread(buf + length, 1, 16, ifp);
       // If we read non-zero bytes, then increment the length
       if (bytes > 0) length += bytes;
     }
@@ -174,7 +184,7 @@ int main(int argc, char* argv[]) {
 
   #ifdef DEBUG
   // Print the memory buffer to show the most recent data
-  for (unsigned long i = 0; i < 256; ++i)
+  for (uint64_t i = 0; i < 256; ++i)
     fprintf(stderr, "%s%02x", (i % 16 == 0 ?
       (i == 0 ? "" : "\n") : " "), ((unsigned char*)buf)[i]);
   fprintf(stderr, "\n");
@@ -237,9 +247,11 @@ void timespec_diff(const struct timespec* start, struct timespec* end) {
 void usage(int argc, char* argv[]) {
   if (argc > 0) {
     print_devices();
-    fprintf(stderr, "\nUsage: %s <file> <device> <key> <nonce>\n", argv[0]);
+    fprintf(stderr, "\nUsage: %s <file> <device> <limit> <key> "
+      "<nonce>\n", argv[0]);
     fprintf(stderr, "  * file   is a file path to in-place (de|en)crypt\n"
                     "  * device is a numeric index from above\n"
+                    "  * limit  is a maximum number of kernels\n"
                     "  * key    is a 128-bit hexadecimal value\n"
                     "  * nonce  is a  64-bit hexadecimal value\n");
   } else {

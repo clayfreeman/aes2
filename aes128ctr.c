@@ -49,7 +49,7 @@ const char DGPU64[] = "aes128ctr.gpu64.bc";
  */
 cl_int aes128ctr_create_buffer(cl_mem* const buffer,
     cl_context* const context, const cl_mem_flags flags,
-    const unsigned long size, void* ptr) {
+    const uint64_t size, void* ptr) {
   // Allocate storage for an error code and attempt to create the buffer
   cl_int status = CL_SUCCESS;
   (*buffer) = clCreateBuffer(*context, flags, size, ptr, &status);
@@ -170,7 +170,7 @@ cl_int aes128ctr_create_program(cl_program* const program,
  *                  `CL_DEVICE_NOT_FOUND` (19) if no such device.
  */
 cl_int aes128ctr_get_device_by_index(cl_device_id* const device,
-    const unsigned long index) {
+    const uint64_t index) {
   // Allocate storage space for required variables
   cl_uint  device_count =    0;
   cl_device_id* devices = NULL;
@@ -196,18 +196,21 @@ cl_int aes128ctr_get_device_by_index(cl_device_id* const device,
  *
  * @param   context  The AES128 CTR context to be initialized.
  * @param   device   The zero-index of the desired OpenCL device.
+ * @param   limit    The maximum number of concurrent blocks allowed.
  * @param   key      The key used to encrypt the plaintext input.
  * @param   nonce    The nonce used for the CTR block cipher mode.
  *
  * @return           An OpenCL status (error) code.
  */
 cl_int aes128ctr_init(aes128ctr_context_t* const context,
-    const unsigned long device, const aes128_key_t* const key,
-    const aes128_nonce_t* const nonce) {
+    const uint64_t device, const uint64_t limit,
+    const aes128_key_t* const key, const aes128_nonce_t* const nonce) {
   // Create a temporary status variable for error checking
   cl_int status = CL_SUCCESS;
   // Zero-initialize the structure before first use
   memset(context, 0, sizeof(*context));
+  // Keep track of the maximum number of concurrent blocks
+  context->limit = limit;
   // Attempt to fetch the OpenCL device ID of the preferred device by index
   status = aes128ctr_get_device_by_index(&context->device, device);
   if (status != CL_SUCCESS) return status;
@@ -227,8 +230,7 @@ cl_int aes128ctr_init(aes128ctr_context_t* const context,
   if (status != CL_SUCCESS) return status;
   // Attempt to create a pinned memory buffer for storing results
   status = aes128ctr_create_buffer(&context->_st, &context->context,
-    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
-    AES128CTR_MAX_KERNELS << 4, NULL);
+    CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, context->limit << 4, NULL);
   if (status != CL_SUCCESS) return status;
   // Attempt to create a constant memory buffer for the substitution box
   status = aes128ctr_create_buffer(&context->_sb, &context->context,
@@ -294,15 +296,15 @@ void aes128ctr_destroy(aes128ctr_context_t* const context) {
   clReleaseContext(context->context);
 }
 
-unsigned long aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
-    aes128_state_t* data, unsigned long count) {
+uint64_t aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
+    aes128_state_t* data, uint64_t count) {
   cl_int       status = CL_SUCCESS;
   // Keep track of the amount of encrypted blocks
-  unsigned long start = context->index;
+  uint64_t start = context->index;
   // Continue processing data until the request is satisfied
   while (status == CL_SUCCESS && count > 0) {
     // Determine the number of blocks to encrypt this round
-    unsigned long blocks = MIN(AES128CTR_MAX_KERNELS, count);
+    unsigned long blocks = MIN(context->limit, count);
     // Write the input data into the encryption buffer
     status = clEnqueueWriteBuffer(context->queue, context->_st, CL_FALSE,
       0, blocks << 4, data, 0, NULL, NULL);

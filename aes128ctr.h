@@ -28,8 +28,6 @@
   #include <CL/opencl.h>
 #endif
 
-#define AES128CTR_MAX_KERNELS 1UL << 20
-
 typedef struct {
   /**
    * Variables pertaining to the execution context of the AES128 CTR OpenCL
@@ -49,16 +47,17 @@ typedef struct {
   cl_mem             _g2; // The "times 2" Galois field 2**8
   cl_mem              _k; // The prepared key space for each AES round
   cl_mem              _n; // The constant nonce value used for CTR mode
-  unsigned long    index; // The next block index to be encrypted
+  uint64_t         limit; // The maximum number of concurrent blocks allowed
+  uint64_t         index; // The next block index to be encrypted
 } aes128ctr_context_t;
 
 extern cl_int aes128ctr_init(aes128ctr_context_t* const context,
-  const unsigned long device, const aes128_key_t* const key,
-  const aes128_nonce_t* const nonce);
+  const uint64_t device, const uint64_t limit,
+  const aes128_key_t* const key, const aes128_nonce_t* const nonce);
 
 extern void aes128ctr_destroy(aes128ctr_context_t* const context);
 
-extern unsigned long aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
-  aes128_state_t* data, unsigned long count);
+extern uint64_t aes128ctr_crypt_blocks(aes128ctr_context_t* const context,
+  aes128_state_t* data, uint64_t count);
 
 #endif
